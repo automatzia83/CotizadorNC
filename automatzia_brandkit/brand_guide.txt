@@ -1,0 +1,13 @@
+
+AUTOMATZIA BRAND KIT
+
+Primary Colors:
+#0B1F3A (Dark Blue)
+#00AEEF (Blue)
+#00FFC6 (Cyan)
+
+Typography:
+Inter, Poppins
+
+Tagline:
+Automatiza · Optimiza · Transforma
