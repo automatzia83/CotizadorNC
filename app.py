@@ -250,7 +250,7 @@ def build_quote(order_df, price_df):
     return {"ok": True, "msg": "OK", "data": out, "missing": pd.DataFrame()}
 
 
-def write_quote_xlsx(header, quote_df, missing_df=None):
+def write_quote_xlsx(header, quote_df, missing_df=None, include_iva=True):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Cotizacion"
@@ -315,16 +315,19 @@ def write_quote_xlsx(header, quote_df, missing_df=None):
         ws.row_dimensions[r].height = 16
 
     subtotal = float(quote_df["IMPORTE"].sum())
-    iva      = subtotal * 0.16
+    iva      = subtotal * 0.16 if include_iva else 0.0
     total    = subtotal + iva
     n        = len(quote_df)
     r_tot    = start_tbl + n + 2
 
-    for offset, lbl, val, clr in [
+    totals_rows = [
         (0, "SUBTOTAL", subtotal, "0B1F3A"),
-        (1, "IVA 16%",  iva,      "0B1F3A"),
-        (2, "TOTAL",    total,    "00AEEF"),
-    ]:
+    ]
+    if include_iva:
+        totals_rows.append((1, "IVA 16%", iva, "0B1F3A"))
+    totals_rows.append((len(totals_rows), "TOTAL", total, "00AEEF"))
+
+    for offset, lbl, val, clr in totals_rows:
         lc = ws.cell(row=r_tot + offset, column=5, value=lbl)
         lc.font      = Font(bold=True, color=clr, name="Calibri")
         lc.alignment = Alignment(horizontal="right")
@@ -392,6 +395,7 @@ for _k, _v in [
     ("price_source", DEFAULT_PRICE_FILE),
     ("price_sheet", None),
     ("xlsx_bytes", None),
+    ("include_iva", True),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -469,6 +473,10 @@ with tab_cotizar:
         label_visibility="collapsed",
     )
     allow_partial = st.checkbox("Descargar aunque falten modelos", value=True)
+    include_iva = st.checkbox("Incluir IVA (16%)", value=st.session_state.include_iva)
+    if include_iva != st.session_state.include_iva:
+        st.session_state.include_iva = include_iva
+        st.session_state.xlsx_bytes  = None
     run = st.button("Generar cotizacion", type="primary", use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -506,10 +514,15 @@ with tab_cotizar:
         subtotal = res["data"]["IMPORTE"].sum()
         iva      = subtotal * 0.16
         total    = subtotal + iva
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Subtotal", f"${subtotal:,.2f}")
-        c2.metric("IVA 16%",  f"${iva:,.2f}")
-        c3.metric("Total",    f"${total:,.2f}")
+        if st.session_state.include_iva:
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Subtotal", f"${subtotal:,.2f}")
+            c2.metric("IVA 16%",  f"${iva:,.2f}")
+            c3.metric("Total",    f"${total:,.2f}")
+        else:
+            c1, c2 = st.columns(2)
+            c1.metric("Subtotal", f"${subtotal:,.2f}")
+            c2.metric("Total",    f"${subtotal:,.2f}")
         st.markdown("</div>", unsafe_allow_html=True)
 
     if res is not None and not res["data"].empty and (res["ok"] or allow_partial):
@@ -524,6 +537,7 @@ with tab_cotizar:
             st.session_state.xlsx_bytes = write_quote_xlsx(
                 header_data, res["data"],
                 missing_df=res["missing"] if not res["ok"] else None,
+                include_iva=st.session_state.include_iva,
             )
 
         fname = f"cotizacion_{date.today().strftime('%Y%m%d')}_{(cliente or 'cliente').replace(' ','_')}.xlsx"
@@ -617,6 +631,7 @@ with tab_precios:
         edited_df = st.data_editor(
             st.session_state.price_df,
             use_container_width=True, num_rows="dynamic", key="price_editor", hide_index=True,
+            disabled=False,
         )
         if st.button("💾 Aplicar cambios a la sesion", use_container_width=True):
             st.session_state.price_df     = edited_df
