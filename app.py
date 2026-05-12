@@ -614,13 +614,12 @@ with tab_precios:
         help="Columnas requeridas: MODELO, ARTICULO, CANT X CAJA, PRECIO 3",
     )
     if uploaded is not None:
-        tmp_path = f"www/_uploaded_{uploaded.name}"
-        with open(tmp_path, "wb") as f:
+        with open(DEFAULT_PRICE_FILE, "wb") as f:
             f.write(uploaded.read())
-        ok_u, _, result_u = _refresh_price(tmp_path)
+        ok_u, _, result_u = _refresh_price(DEFAULT_PRICE_FILE)
         if ok_u:
             _load.clear()
-            st.success(f"✅ Lista actualizada: {uploaded.name} ({len(result_u)} filas)")
+            st.success(f"✅ Lista actualizada permanentemente: {uploaded.name} ({len(result_u)} filas)")
         else:
             st.error(f"❌ No se pudo leer el archivo: {result_u}")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -628,10 +627,16 @@ with tab_precios:
     if st.session_state.price_df is not None:
         st.markdown('<div class="nc-card" style="margin-top:12px;"><div class="nc-card-title">✏️ Editar precios</div>', unsafe_allow_html=True)
         st.caption("Edita directamente. Los cambios se aplican a la sesion actual.")
+        # Forzar tipos editables: object -> string, numerics mantienen su tipo
+        _editable_df = st.session_state.price_df.copy()
+        for _c in _editable_df.columns:
+            if _editable_df[_c].dtype == object:
+                _editable_df[_c] = _editable_df[_c].where(
+                    _editable_df[_c].isna(), _editable_df[_c].astype(str)
+                ).astype(pd.StringDtype())
         edited_df = st.data_editor(
-            st.session_state.price_df,
+            _editable_df,
             use_container_width=True, num_rows="dynamic", key="price_editor", hide_index=True,
-            disabled=False,
         )
         if st.button("💾 Aplicar cambios a la sesion", use_container_width=True):
             st.session_state.price_df     = edited_df
